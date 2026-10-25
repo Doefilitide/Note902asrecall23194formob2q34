@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0f0f13">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>NoteRecall Mobile</title>
+  
+  <link rel="manifest" href="manifest.json?v=2.8">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <link rel="stylesheet" href="style.css?v=2.8">
+</head>
+<body>
+  <div id="app">
+    <!-- Top Navigation -->
+    <header class="top-nav">
+      <div class="nav-brand">
+        <span>📖 NoteRecall</span>
+        <span class="badge" id="appVersionBadge" onclick="window.NoteRecallMobile && window.NoteRecallMobile.forceRefresh()" style="cursor:pointer;" title="Tap to check for updates">v2.8 FLOW</span>
+        <span class="badge badge-synced" id="syncStatusBadge" title="Sync status with desktop" style="cursor:pointer;" onclick="window.NoteRecallMobile && window.NoteRecallMobile.syncWithHub()">🟢 Synced</span>
+      </div>
+      <div class="nav-actions">
+        <button id="btnHubConfig" class="btn btn-secondary" onclick="window.NoteRecallMobile && window.NoteRecallMobile.promptHubConfig()" title="Configure Laptop Hub IP (for GitHub Pages)" style="padding: 6px 10px; font-size: 13px;">💻</button>
+        <button id="btnLoadPack" class="btn btn-secondary" title="Import pack.json">📂 Load</button>
+        <button id="btnExportLog" class="btn btn-primary" title="Sync review log to laptop">💾 Sync</button>
+      </div>
+    </header>
+
+    <!-- Main Container -->
+    <main id="mainContainer" class="view-container">
+      <!-- Injected by app.js -->
+    </main>
+
+    <!-- Swipe Feedback Flash -->
+    <div id="swipeFlash" class="swipe-flash"></div>
+
+    <!-- Interactive Toast Notification -->
+    <div id="pwaToast" class="pwa-toast"></div>
+
+    <!-- Hidden File Input for loading pack.json -->
+    <input type="file" id="fileInput" accept=".json,application/json" style="display:none">
+  </div>
+
+  <!-- Scripts with cache-busting query params and relative paths for universal hosting -->
+  <script src="fsrs.js?v=2.8"></script>
+  <script src="db.js?v=2.8"></script>
+  <script src="app.js?v=2.8"></script>
+  <script>
+    // Register and update service worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        for (const reg of regs) {
+          reg.update();
+        }
+      });
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        console.log('[NoteRecall PWA] Controller changed, reloading...');
+        window.location.reload();
+      });
+
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js?v=2.8')
+          .then(reg => {
+            reg.update();
+            console.log('[NoteRecall PWA] SW registered successfully.');
+          })
+          .catch(err => {
+            console.warn('[NoteRecall PWA] SW notice:', err.message);
+          });
+      });
+    }
+  </script>
+</body>
+</html>
