@@ -573,12 +573,16 @@ body, html {
   color: var(--accent);
   background: var(--accent-soft);
   border: 1px solid rgba(99,102,241,0.25);
-  padding: 4px 12px;
+  padding: 5px 14px;
   border-radius: 20px;
   align-self: center;
   max-width: 100%;
   text-align: center;
   box-shadow: 0 2px 8px rgba(99,102,241,0.1);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  backdrop-filter: blur(8px);
 }
 
 /* ── Content & Spotlight ───────────────────────────────────── */
@@ -594,6 +598,32 @@ body, html {
 .review-content p, .review-content li, .review-content td, .review-content th {
   color: var(--text) !important;
 }
+
+/* ── Subpoints & List Structure for Review Modes ─────────── */
+.review-content ul, .review-content ol,
+.isolated-content ul, .isolated-content ol {
+  padding-left: 24px;
+  margin: 10px 0;
+  list-style-position: outside;
+}
+
+.review-content li, .isolated-content li {
+  margin: 6px 0;
+  display: list-item;
+}
+
+.review-content ul ul, .review-content ol ol,
+.review-content ul ol, .review-content ol ul,
+.isolated-content ul ul, .isolated-content ol ol,
+.isolated-content ul ol, .isolated-content ol ul {
+  padding-left: 20px;
+  margin: 4px 0;
+}
+
+.review-content ul, .isolated-content ul { list-style-type: disc; }
+.review-content ul ul, .isolated-content ul ul { list-style-type: circle; }
+.review-content ul ul ul, .isolated-content ul ul ul { list-style-type: square; }
+.review-content ol, .isolated-content ol { list-style-type: decimal; }
 
 .review-content strong, .review-content b, .review-content h1, .review-content h2, .review-content h3 {
   color: #ffffff !important;

@@ -589,31 +589,35 @@
       div.innerHTML = noteContent;
       const targetStr = String(clozeNum);
       const clozeEl = Array.from(div.querySelectorAll('span.cloze')).find(s => String(s.getAttribute('data-c')) === targetStr);
-      if (!clozeEl) return null;
 
       // Find all heading elements and clozes in document order
       const allNodes = Array.from(div.querySelectorAll('h1, h2, h3, h4, span.cloze'));
-      const clozeIdx = allNodes.indexOf(clozeEl);
-      if (clozeIdx === -1) return null;
+      const clozeIdx = clozeEl ? allNodes.indexOf(clozeEl) : -1;
 
-      const priorNodes = allNodes.slice(0, clozeIdx);
-      let lastH1 = null, lastH2 = null, lastH3 = null, lastH4 = null;
+      if (clozeIdx !== -1) {
+        const priorNodes = allNodes.slice(0, clozeIdx);
+        let lastH1 = null, lastH2 = null, lastH3 = null, lastH4 = null;
 
-      priorNodes.forEach(node => {
-        const tag = node.tagName;
-        const txt = node.textContent.trim();
-        if (!txt) return;
-        if (tag === 'H1') { lastH1 = txt; lastH2 = null; lastH3 = null; lastH4 = null; }
-        else if (tag === 'H2') { lastH2 = txt; lastH3 = null; lastH4 = null; }
-        else if (tag === 'H3') { lastH3 = txt; lastH4 = null; }
-        else if (tag === 'H4') { lastH4 = txt; }
-      });
+        priorNodes.forEach(node => {
+          const tag = node.tagName;
+          const txt = node.textContent.trim();
+          if (!txt) return;
+          if (tag === 'H1') { lastH1 = txt; lastH2 = null; lastH3 = null; lastH4 = null; }
+          else if (tag === 'H2') { lastH2 = txt; lastH3 = null; lastH4 = null; }
+          else if (tag === 'H3') { lastH3 = txt; lastH4 = null; }
+          else if (tag === 'H4') { lastH4 = txt; }
+        });
 
-      const path = [lastH1, lastH2, lastH3, lastH4].filter(Boolean);
-      if (path.length > 0) {
-        return path.map(h => `📌 ${h}`).join(' ');
+        const path = [lastH1, lastH2, lastH3, lastH4].filter(Boolean);
+        if (path.length > 0) {
+          return path.join(' › ');
+        }
       }
-      return null;
+
+      // Fallback for full note mode or clozes before the first sub-heading:
+      // Show the first heading found anywhere in the note so the pill is always populated
+      const anyH = div.querySelector('h1, h2, h3, h4');
+      return anyH ? anyH.textContent.trim() : null;
     } catch (e) {
       return null;
     }
@@ -638,7 +642,7 @@
     const progressPct = total > 0 ? (done / total) * 100 : 0;
 
     const topicHeading = extractTopicHeading(note.content, card.clozeNum);
-    const headingPillText = topicHeading || (card.folderPath && card.folderPath.length > 0 ? `📁 ${card.folderPath.join(' ➔ ')}` : `📌 ${note.title}`);
+    const headingPillText = topicHeading ? `📌 ${topicHeading}` : (card.folderPath && card.folderPath.length > 0 ? `📁 ${card.folderPath.join(' ➔ ')}` : `📌 ${note.title}`);
 
     let recallHtml = '';
     if (state.focusMode === 'isolated') {
