@@ -21,7 +21,7 @@
     <header class="top-nav">
       <div class="nav-brand">
         <span>📖 NoteRecall</span>
-        <span class="badge" id="appVersionBadge" onclick="window.NoteRecallMobile && window.NoteRecallMobile.forceRefresh()" style="cursor:pointer;" title="Tap to check for updates">v2.8 FLOW</span>
+        <span class="badge" id="appVersionBadge" onclick="window.NoteRecallMobile && window.NoteRecallMobile.forceRefresh()" style="cursor:pointer;" title="Tap to check for updates">v3.0 SYNC</span>
         <span class="badge badge-synced" id="syncStatusBadge" title="Sync status with desktop" style="cursor:pointer;" onclick="window.NoteRecallMobile && window.NoteRecallMobile.syncWithHub()">🟢 Synced</span>
       </div>
       <div class="nav-actions">
@@ -30,6 +30,9 @@
         <button id="btnExportLog" class="btn btn-primary" title="Sync review log to laptop">💾 Sync</button>
       </div>
     </header>
+
+    <!-- New Pack Notification Banner (Auto-Sync from Laptop) -->
+    <div id="newPackBanner" class="new-pack-banner" style="display:none;"></div>
 
     <!-- Main Container -->
     <main id="mainContainer" class="view-container">
@@ -49,7 +52,7 @@
   <!-- Scripts with cache-busting query params and relative paths for universal hosting -->
   <script src="fsrs.js?v=2.8"></script>
   <script src="db.js?v=2.8"></script>
-  <script src="app.js?v=2.8"></script>
+  <script src="app.js?v=3.0"></script>
   <script>
     // Register and update service worker
     if ('serviceWorker' in navigator) {

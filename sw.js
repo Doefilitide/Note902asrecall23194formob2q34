@@ -1,4 +1,4 @@
-const CACHE_NAME = 'noterecall-pwa-v2.9';
+const CACHE_NAME = 'noterecall-pwa-v3.0';
 const ASSETS_TO_CACHE = [
   './',
   'index.html',

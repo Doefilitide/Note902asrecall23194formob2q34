@@ -144,14 +144,18 @@
 
     // Catch up when device is unlocked or app tab is switched to
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && state.pack) {
-        exportReviewLog(false);
-        syncActiveReviewsWithHub();
+      if (document.visibilityState === 'visible') {
+        checkLaptopForPack();
+        if (state.pack) {
+          autoSyncReviewsToHub();
+          syncActiveReviewsWithHub();
+        }
       }
     });
     window.addEventListener('focus', () => {
+      checkLaptopForPack();
       if (state.pack) {
-        exportReviewLog(false);
+        autoSyncReviewsToHub();
         syncActiveReviewsWithHub();
       }
     });
@@ -160,8 +164,11 @@
     window.addEventListener('online', () => {
       console.log('[NoteRecall PWA] Device reconnected to network.');
       showToast('📶 Reconnected! Syncing with laptop...');
-      exportReviewLog(false);
-      syncActiveReviewsWithHub();
+      checkLaptopForPack();
+      if (state.pack) {
+        autoSyncReviewsToHub();
+        syncActiveReviewsWithHub();
+      }
     });
 
     window.addEventListener('offline', () => {
@@ -170,12 +177,13 @@
       showToast('✈️ Offline mode active. All reviews saved locally.');
     });
 
-    // Periodic heartbeat to auto-sync when in background or when returning home
-    setInterval(() => {
-      if (state.pack && navigator.onLine) {
-        exportReviewLog(false);
-      }
-    }, 25000);
+    // Background local Wi-Fi auto-sync:
+    // 1. Poll for newly exported packs from laptop every 4 seconds
+    setInterval(checkLaptopForPack, 4000);
+    // 2. Auto-return completed reviews to laptop every 10 seconds
+    setInterval(autoSyncReviewsToHub, 10000);
+    // Initial check right after boot
+    setTimeout(checkLaptopForPack, 1000);
   }
 
   // ── Pack Loading & Parsing ───────────────────────────────────
@@ -226,6 +234,129 @@
     renderHome();
     updateSyncStatusUI('synced');
     showToast(`📦 Pack loaded: ${pack.cards ? pack.cards.length : 0} cards ready offline!`);
+  }
+
+  // ── Local Wi-Fi Auto-Sync Engine (Pack Detection & Auto-Return) ─
+  let discoveredPackMeta = null;
+  let lastSyncedReviewCount = 0;
+
+  async function checkLaptopForPack() {
+    if (!navigator.onLine) return;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 2000);
+      const res = await fetch(getHubUrl('/api/pack/meta'), { cache: 'no-store', signal: controller.signal });
+      clearTimeout(timer);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data || !data.ok || !data.packId) {
+        hideNewPackBanner();
+        return;
+      }
+
+      // If no pack is currently loaded at all, auto-fetch and load immediately!
+      if (!state.pack) {
+        const pack = await fetchLatestPackFromDesktop();
+        if (pack && pack.packId === data.packId) {
+          await loadPackData(pack);
+          syncActiveReviewsWithHub();
+          showToast(`⚡ Auto-loaded ${data.cardCount || 0} cards from laptop!`);
+        }
+        return;
+      }
+
+      // If a new pack is available that is different from currently loaded pack
+      if (state.pack.packId !== data.packId) {
+        discoveredPackMeta = data;
+        showNewPackBanner(data);
+      } else {
+        hideNewPackBanner();
+      }
+    } catch (e) {
+      // Hub unreachable (offline / away from WiFi)
+    }
+  }
+
+  function showNewPackBanner(meta) {
+    const banner = document.getElementById('newPackBanner');
+    if (!banner) return;
+    banner.innerHTML = `
+      <div class="new-pack-banner-info">
+        <span style="font-size: 20px;">📦</span>
+        <div>
+          <div class="new-pack-banner-title">New deck ready from laptop</div>
+          <div class="new-pack-banner-sub">${meta.cardCount || 'Multiple'} cards available to study</div>
+        </div>
+      </div>
+      <div class="new-pack-banner-actions">
+        <button class="btn btn-primary" onclick="window.NoteRecallMobile.loadDiscoveredPack()" style="padding: 6px 12px; font-size: 12px;">Load Deck</button>
+        <button class="btn btn-secondary" onclick="window.NoteRecallMobile.dismissDiscoveredPack()" style="padding: 6px 10px; font-size: 12px;">Dismiss</button>
+      </div>
+    `;
+    banner.style.display = 'flex';
+  }
+
+  function hideNewPackBanner() {
+    const banner = document.getElementById('newPackBanner');
+    if (banner) banner.style.display = 'none';
+  }
+
+  async function loadDiscoveredPack() {
+    hideNewPackBanner();
+    showToast('⏳ Downloading pack from laptop...');
+    const pack = await fetchLatestPackFromDesktop();
+    if (pack) {
+      await loadPackData(pack);
+      syncActiveReviewsWithHub();
+      showToast(`✅ Loaded ${pack.cards ? pack.cards.length : 0} cards from laptop!`);
+    } else {
+      showToast('❌ Failed to download pack from laptop.');
+    }
+  }
+
+  function dismissDiscoveredPack() {
+    hideNewPackBanner();
+  }
+
+  async function autoSyncReviewsToHub() {
+    if (!state.pack || !navigator.onLine) return;
+    try {
+      const reviews = await window.NoteRecallDB.getReviewsForPack(state.pack.packId);
+      if (reviews.length === 0 || reviews.length === lastSyncedReviewCount) return;
+
+      const payload = {
+        version: 1,
+        packId: state.pack.packId,
+        exportedAt: new Date().toISOString(),
+        device: 'NoteRecall-Mobile-PWA',
+        reviewCount: reviews.length,
+        reviews: reviews.map(r => ({
+          cardId: r.cardId,
+          grade: r.grade,
+          timestamp: r.timestamp,
+          latencyMs: r.latencyMs,
+          hintUsed: !!r.hintUsed
+        }))
+      };
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 2500);
+      const res = await fetch(getHubUrl('/api/pack/log'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+
+      if (res.ok) {
+        lastSyncedReviewCount = reviews.length;
+        updateSyncStatusUI('synced');
+        showToast(`⚡ ${reviews.length} reviews auto-synced with laptop`);
+      }
+    } catch (e) {
+      // Laptop not reachable
+    }
   }
 
   async function fetchLatestPackFromDesktop() {
@@ -1262,7 +1393,8 @@
   }
 
   function renderSessionComplete() {
-    // Auto-export review log when session ends
+    // Auto-export review log and sync back to laptop when session ends
+    autoSyncReviewsToHub();
     exportReviewLog(false);
 
     $main.innerHTML = `
@@ -1287,6 +1419,7 @@
   function triggerBackgroundSync() {
     clearTimeout(syncDebounceTimer);
     syncDebounceTimer = setTimeout(() => {
+      autoSyncReviewsToHub();
       exportReviewLog(false);
     }, 1500);
   }
@@ -1608,6 +1741,8 @@
     setTimerDuration,
     toggleAdaptiveFlow,
     promptHubConfig,
+    loadDiscoveredPack,
+    dismissDiscoveredPack,
     retryFetchPack: async () => {
       showToast('🔍 Checking laptop for pack...');
       const pack = await fetchLatestPackFromDesktop();
