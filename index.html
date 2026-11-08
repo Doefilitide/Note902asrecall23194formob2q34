@@ -9,11 +9,11 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>NoteRecall Mobile</title>
   
-  <link rel="manifest" href="manifest.json?v=3.1">
+  <link rel="manifest" href="manifest.json?v=3.2">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-  <link rel="stylesheet" href="style.css?v=3.1">
+  <link rel="stylesheet" href="style.css?v=3.2">
 </head>
 <body>
   <div id="app">
@@ -21,7 +21,7 @@
     <header class="top-nav">
       <div class="nav-brand">
         <span>📖 NoteRecall</span>
-        <span class="badge" id="appVersionBadge" onclick="window.NoteRecallMobile && window.NoteRecallMobile.forceRefresh()" style="cursor:pointer;" title="Tap to check for updates">v3.1 SYNC</span>
+        <span class="badge" id="appVersionBadge" onclick="window.NoteRecallMobile && window.NoteRecallMobile.forceRefresh()" style="cursor:pointer;" title="Tap to check for updates">v3.2 SYNC</span>
         <span class="badge badge-synced" id="syncStatusBadge" title="Sync status with desktop" style="cursor:pointer;" onclick="window.NoteRecallMobile && window.NoteRecallMobile.syncWithHub()">🟢 Synced</span>
       </div>
       <div class="nav-actions">
@@ -50,9 +50,9 @@
   </div>
 
   <!-- Scripts with cache-busting query params and relative paths for universal hosting -->
-  <script src="fsrs.js?v=3.1"></script>
-  <script src="db.js?v=3.1"></script>
-  <script src="app.js?v=3.1"></script>
+  <script src="fsrs.js?v=3.2"></script>
+  <script src="db.js?v=3.2"></script>
+  <script src="app.js?v=3.2"></script>
   <script>
     // Register and update service worker
     if ('serviceWorker' in navigator) {
@@ -67,7 +67,7 @@
       });
 
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=3.1')
+        navigator.serviceWorker.register('sw.js?v=3.2')
           .then(reg => {
             reg.update();
             console.log('[NoteRecall PWA] SW registered successfully.');

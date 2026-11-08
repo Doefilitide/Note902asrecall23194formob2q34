@@ -1163,11 +1163,26 @@
     return div.innerHTML;
   }
 
-  function toggleOtherCloze(el) {
-    if (!el) return;
+  function toggleOtherCloze(rawEl) {
+    if (!rawEl) return;
+    const el = rawEl.closest('.cloze') || rawEl;
     const cNum = String(el.getAttribute('data-c'));
     const isRevealed = el.classList.contains('cloze-revealed');
-    const origHtml = el.getAttribute('data-orig-html') || el.getAttribute('data-orig') || el.innerHTML;
+    let origHtml = el.getAttribute('data-orig-html') || el.getAttribute('data-orig');
+
+    // Fail-safe: if missing, look up original cloze HTML directly from note source
+    if (!origHtml || origHtml === '[···]') {
+      const note = state.pack.notes && state.pack.notes[state.activeCard.noteId];
+      if (note && note.content) {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = note.content;
+        const matchingSpan = tempDiv.querySelector(`.cloze[data-c="${cNum}"]`);
+        if (matchingSpan) {
+          origHtml = matchingSpan.innerHTML;
+        }
+      }
+    }
+    if (!origHtml) origHtml = el.innerHTML;
     el.setAttribute('data-orig-html', origHtml);
 
     if (isRevealed) {
@@ -1184,64 +1199,72 @@
   }
 
   function setupClozeClickListeners() {
-    const area = document.getElementById('reviewContentArea');
-    if (!area) return;
-
-    // Delegated click handler on content area so dynamic clozes always work
-    area.onclick = (e) => {
-      // 1. Tapped any non-target cloze -> toggle in-place (no grading, no card reveal)
-      const other = e.target.closest('.cloze-other');
-      if (other) {
-        e.preventDefault();
-        e.stopPropagation();
-        toggleOtherCloze(other);
-        return;
-      }
-
-      // 2. Tapped target cloze -> reveals answer!
-      const target = e.target.closest('.cloze-target');
-      if (target) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!state.revealed) {
-          doReveal();
-        }
-        return;
-      }
-    };
+    // Delegated to onCardBoxClick on #reviewCardBox for a single unified pipeline
   }
 
+  let _lastCardTapTime = 0;
+  let _singleTapTimeout = null;
+
   function onCardBoxClick(e) {
-    if (e.target.closest('button, .btn, a, input, select')) {
+    if (e.target.closest('button, .btn, a, input, select, .grade-btn')) {
       return;
     }
 
-    // Attempt fullscreen / address-bar docking on user touch
-    enterFullscreen();
-
-    // 1. Tapped non-due cloze -> toggle in-place
-    const other = e.target.closest('.cloze-other');
+    // 1. Tapped non-due cloze -> toggle in-place (ZERO impact on grading or main card)
+    const other = e.target.closest('.cloze-other') || e.target.closest('.cloze:not(.cloze-target)');
     if (other) {
       e.preventDefault();
       e.stopPropagation();
+      clearTimeout(_singleTapTimeout);
+      _singleTapTimeout = null;
+      _lastCardTapTime = 0;
       toggleOtherCloze(other);
       return;
     }
 
-    // 2. Tapped active target cloze -> reveal
+    // 2. Tapped active target cloze -> reveal immediately
     const target = e.target.closest('.cloze-target');
     if (target) {
       e.preventDefault();
       e.stopPropagation();
+      clearTimeout(_singleTapTimeout);
+      _singleTapTimeout = null;
+      _lastCardTapTime = 0;
       if (!state.revealed) {
         doReveal();
       }
       return;
     }
 
-    // 3. Tapped card background -> reveal
+    // 3. Tapped card background -> check for DOUBLE TAP TO SKIP!
+    const now = Date.now();
+    const timeSinceLastTap = now - _lastCardTapTime;
+
+    if (timeSinceLastTap > 0 && timeSinceLastTap < 320) {
+      // Double tap confirmed! Cancel pending single tap and SKIP!
+      clearTimeout(_singleTapTimeout);
+      _singleTapTimeout = null;
+      _lastCardTapTime = 0;
+      flash('Skip ⏭', 'sf-skip');
+      skipCard();
+      return;
+    }
+
+    // First tap: record timestamp
+    _lastCardTapTime = now;
+
+    // Schedule single tap action with a brief 250ms window for double-tap detection
     if (!state.revealed) {
-      doReveal();
+      clearTimeout(_singleTapTimeout);
+      _singleTapTimeout = setTimeout(() => {
+        _singleTapTimeout = null;
+        if (!state.revealed) {
+          enterFullscreen();
+          doReveal();
+        }
+      }, 250);
+    } else {
+      enterFullscreen();
     }
   }
 
@@ -1417,26 +1440,11 @@
 
     // If touching inside interactive buttons/links or navigation, don't override
     const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
-    if (targetEl && (targetEl.closest('button') || targetEl.closest('.btn') || targetEl.closest('.grade-btn') || targetEl.closest('.top-nav') || targetEl.closest('.review-header') || targetEl.closest('.review-footer') || targetEl.closest('input'))) {
+    if (targetEl && (targetEl.closest('button, .btn, .grade-btn, .top-nav, .review-header, .review-footer, input'))) {
       return;
     }
 
-    // 1. Direct Physical TAP (< 25px movement, < 450ms duration)
-    if (absX <= 25 && absY <= 25 && dt <= 450) {
-      if (targetEl) {
-        const otherCloze = targetEl.closest('.cloze-other');
-        if (otherCloze) {
-          toggleOtherCloze(otherCloze);
-          return;
-        }
-      }
-      if (!state.revealed) {
-        doReveal();
-        return;
-      }
-    }
-
-    // 2. Gesture Swipes (threshold >= 45px, fast enough dt < 650ms)
+    // Gesture Swipes (threshold >= 45px, fast enough dt < 650ms)
     // Horizontal Swipes (Left / Right) - strictly horizontal (absX > absY * 1.5) so vertical scrolling is 100% unimpeded
     if (absX >= 45 && absX > absY * 1.5 && dt < 650) {
       if (!state.revealed) {
