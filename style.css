@@ -556,7 +556,22 @@ body, html {
   -webkit-user-select: none;
   user-select: none;
   touch-action: manipulation;
-  transition: transform 0.08s ease, border-color 0.15s ease;
+  transition: transform 0.12s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.review-card-box.card-entering {
+  animation: cardButterIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes cardButterIn {
+  from {
+    opacity: 0.35;
+    transform: translateY(6px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .review-card-box:active {
@@ -734,12 +749,55 @@ body, html {
 }
 
 .cloze-other {
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 0.1s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  padding: 2px 7px;
+  margin: 0 1px;
+  border-radius: 4px;
+  font-weight: 600;
+  display: inline-block;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.cloze-other.cloze-hidden {
   background: var(--cloze-other-bg);
   color: #c4b5fd;
-  border: 1px dotted rgba(167, 139, 250, 0.4);
-  opacity: 1;
+  border: 1px dashed rgba(167, 139, 250, 0.5);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+.cloze-other.cloze-hidden:active {
+  transform: scale(0.94);
+  background: rgba(167, 139, 250, 0.25);
+}
+
+.cloze-other.cloze-revealed {
+  background: rgba(99, 102, 241, 0.18);
+  color: #c7d2fe;
+  border: 1px solid rgba(165, 180, 252, 0.4);
   font-weight: 600;
-  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.15);
+  animation: fadeIn 0.18s ease;
+}
+
+.cloze-other.cloze-revealed:active {
+  transform: scale(0.95);
+  opacity: 0.85;
+}
+
+/* ── Fullscreen & Peripheral Docking Mode ───────────────────── */
+:fullscreen .review-view,
+:-webkit-full-screen .review-view {
+  height: 100vh !important;
+  max-height: 100vh !important;
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+:fullscreen body,
+:-webkit-full-screen body {
+  background: #0f0f13;
 }
 
 /* ── Floating Action Bar (stays pinned at the bottom on all mobile devices) ── */

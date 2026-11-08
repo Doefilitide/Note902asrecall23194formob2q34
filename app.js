@@ -554,8 +554,57 @@
     }).join('');
   }
 
+  // ── Browser Fullscreen & Address Bar Docking ─────────────────
+  function isAppFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+  }
+
+  function enterFullscreen() {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    if (isStandalone || isAppFullscreen()) return;
+
+    const el = document.documentElement;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+    if (req) {
+      req.call(el).then(() => {
+        updateFullscreenUI();
+      }).catch(() => {
+        // Fallback for environments requiring direct button tap
+      });
+    }
+    // Safari iOS fallback: collapses address bar on scroll
+    try { window.scrollTo(0, 1); } catch (e) {}
+  }
+
+  function exitFullscreen() {
+    if (!isAppFullscreen()) return;
+    const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+    if (exit) {
+      exit.call(document).catch(() => {});
+    }
+  }
+
+  function toggleFullscreen() {
+    if (isAppFullscreen()) {
+      exitFullscreen();
+    } else {
+      enterFullscreen();
+    }
+  }
+
+  function updateFullscreenUI() {
+    const btn = document.getElementById('btnFullscreen');
+    if (btn) {
+      btn.innerHTML = isAppFullscreen() ? '✕ Full' : '⛶ Full';
+    }
+  }
+
+  document.addEventListener('fullscreenchange', updateFullscreenUI);
+  document.addEventListener('webkitfullscreenchange', updateFullscreenUI);
+
   // ── Review Session Launcher ──────────────────────────────────
   function startReview(scopePath) {
+    enterFullscreen();
     state.currentScopePath = scopePath;
     const reviewedSet = getReviewedCardIds();
 
@@ -759,6 +808,21 @@
     renderReviewCard();
   }
 
+  function smoothScrollToTarget(container, targetEl) {
+    if (!container || !targetEl) return;
+    const containerRect = container.getBoundingClientRect();
+    const targetRect = targetEl.getBoundingClientRect();
+    const currentScroll = container.scrollTop;
+    const targetOffset = (targetRect.top - containerRect.top) + currentScroll;
+    const targetCenter = targetOffset - (containerRect.height / 2) + (targetRect.height / 2);
+    const finalScroll = Math.max(0, Math.min(targetCenter, container.scrollHeight - container.clientHeight));
+
+    container.scrollTo({
+      top: finalScroll,
+      behavior: 'smooth'
+    });
+  }
+
   // ── In-Session Card Rendering ─────────────────────────────────
   function renderReviewCard(isNewCard = false) {
     const card = state.activeCard;
@@ -831,6 +895,9 @@
       const focusBtn = document.getElementById('btnFocusMode');
       if (focusBtn) focusBtn.textContent = state.focusMode === 'isolated' ? '🎯 Focus' : '📄 Note';
 
+      const fullBtn = document.getElementById('btnFullscreen');
+      if (fullBtn) fullBtn.textContent = isAppFullscreen() ? '✕ Full' : '⛶ Full';
+
       const undoBtn = document.getElementById('btnUndo');
       if (undoBtn) undoBtn.disabled = !state.lastActionSnapshot;
 
@@ -853,20 +920,27 @@
 
       setupClozeClickListeners();
 
+      const cardBox = document.getElementById('reviewCardBox');
+      if (cardBox) {
+        cardBox.classList.remove('card-entering');
+        void cardBox.offsetWidth;
+        cardBox.classList.add('card-entering');
+      }
+
       // In isolated card focus: stay firmly centered at top of card (zero scroll jump down)
-      // In full note mode: smoothly center directly on the target cloze in the note
+      // In full note mode: smoothly center directly on the target cloze in the note with zero jitter
       if (state.focusMode === 'isolated') {
         existingArea.scrollTop = 0;
       } else {
-        setTimeout(() => {
+        requestAnimationFrame(() => {
           const targetEl = existingContent.querySelector('.cloze-target');
           if (targetEl) {
-            targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            smoothScrollToTarget(existingArea, targetEl);
             targetEl.classList.remove('mode-switch-focus');
             void targetEl.offsetWidth;
             targetEl.classList.add('mode-switch-focus');
           }
-        }, 50);
+        });
       }
       return;
     }
@@ -886,6 +960,9 @@
           <div style="display:flex; gap:6px; align-items:center;">
             <button id="btnFocusMode" class="btn btn-secondary" onclick="window.NoteRecallMobile.toggleFocusMode()" style="font-size: 11px; padding: 4px 8px;" title="Toggle Isolated Focus / Full Note">
               ${state.focusMode === 'isolated' ? '🎯 Focus' : '📄 Note'}
+            </button>
+            <button id="btnFullscreen" class="btn btn-secondary" onclick="window.NoteRecallMobile.toggleFullscreen()" style="font-size: 11px; padding: 4px 8px;" title="Dock browser address bar & toggle Fullscreen">
+              ${isAppFullscreen() ? '✕ Full' : '⛶ Full'}
             </button>
             <button id="btnUndo" class="btn btn-secondary" onclick="window.NoteRecallMobile.undoLastGrade()" style="font-size: 11px; padding: 4px 8px;" ${state.lastActionSnapshot ? '' : 'disabled'}>
               ↩ Undo
@@ -934,15 +1011,15 @@
       if (state.focusMode === 'isolated') {
         cardArea.scrollTop = 0;
       } else {
-        setTimeout(() => {
+        requestAnimationFrame(() => {
           const targetEl = cardArea.querySelector('.cloze-target');
           if (targetEl) {
-            targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            smoothScrollToTarget(cardArea, targetEl);
             targetEl.classList.remove('mode-switch-focus');
             void targetEl.offsetWidth;
             targetEl.classList.add('mode-switch-focus');
           }
-        }, 50);
+        });
       }
     }
   }
@@ -1045,13 +1122,17 @@
     clozes.forEach(span => {
       const dataC = String(span.getAttribute('data-c'));
       const isTarget = dataC === targetStr;
+      const rawHtml = span.getAttribute('data-orig-html') || span.innerHTML;
       const rawText = span.getAttribute('data-orig') || span.textContent;
+      span.setAttribute('data-orig-html', rawHtml);
       span.setAttribute('data-orig', rawText);
 
       if (isTarget) {
         span.classList.add('cloze-target');
+        span.classList.remove('cloze-other');
         if (!revealed) {
           span.classList.add('cloze-hidden');
+          span.classList.remove('cloze-revealed');
           if (hintLevel === 0) {
             span.textContent = '[···]';
           } else {
@@ -1059,15 +1140,21 @@
           }
         } else {
           span.classList.add('cloze-revealed');
-          span.textContent = rawText;
+          span.classList.remove('cloze-hidden');
+          span.innerHTML = rawHtml;
         }
       } else {
+        // Non-target clozes: ALWAYS retain cloze-other class so click delegation never breaks
+        span.classList.add('cloze-other');
+        span.classList.remove('cloze-target');
         const isManuallyRevealed = manuallyRevealed && manuallyRevealed.has(dataC);
         if (isManuallyRevealed) {
           span.classList.add('cloze-revealed');
-          span.textContent = rawText;
+          span.classList.remove('cloze-hidden');
+          span.innerHTML = rawHtml;
         } else {
-          span.classList.add('cloze-other');
+          span.classList.add('cloze-hidden');
+          span.classList.remove('cloze-revealed');
           span.textContent = '[···]';
         }
       }
@@ -1080,18 +1167,18 @@
     if (!el) return;
     const cNum = String(el.getAttribute('data-c'));
     const isRevealed = el.classList.contains('cloze-revealed');
-    const orig = el.getAttribute('data-orig') || el.textContent;
-    el.setAttribute('data-orig', orig);
+    const origHtml = el.getAttribute('data-orig-html') || el.getAttribute('data-orig') || el.innerHTML;
+    el.setAttribute('data-orig-html', origHtml);
 
     if (isRevealed) {
       el.classList.remove('cloze-revealed');
-      el.classList.add('cloze-other');
+      el.classList.add('cloze-hidden');
       el.textContent = '[···]';
       state.manuallyRevealed.delete(cNum);
     } else {
-      el.classList.remove('cloze-other');
+      el.classList.remove('cloze-hidden');
       el.classList.add('cloze-revealed');
-      el.textContent = orig;
+      el.innerHTML = origHtml;
       state.manuallyRevealed.add(cNum);
     }
   }
@@ -1100,36 +1187,59 @@
     const area = document.getElementById('reviewContentArea');
     if (!area) return;
 
-    // Direct click on target cloze -> reveals answer!
-    const targetSpan = area.querySelector('.cloze-target');
-    if (targetSpan) {
-      targetSpan.onclick = (e) => {
+    // Delegated click handler on content area so dynamic clozes always work
+    area.onclick = (e) => {
+      // 1. Tapped any non-target cloze -> toggle in-place (no grading, no card reveal)
+      const other = e.target.closest('.cloze-other');
+      if (other) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleOtherCloze(other);
+        return;
+      }
+
+      // 2. Tapped target cloze -> reveals answer!
+      const target = e.target.closest('.cloze-target');
+      if (target) {
+        e.preventDefault();
         e.stopPropagation();
         if (!state.revealed) {
           doReveal();
         }
-      };
-    }
-
-    // Direct click on other clozes -> in-place toggle
-    area.querySelectorAll('.cloze-other').forEach(el => {
-      el.onclick = (e) => {
-        e.stopPropagation();
-        toggleOtherCloze(el);
-      };
-    });
+        return;
+      }
+    };
   }
 
   function onCardBoxClick(e) {
-    if (e.target.closest('button') || e.target.closest('.btn') || e.target.closest('a')) {
+    if (e.target.closest('button, .btn, a, input, select')) {
       return;
     }
+
+    // Attempt fullscreen / address-bar docking on user touch
+    enterFullscreen();
+
+    // 1. Tapped non-due cloze -> toggle in-place
     const other = e.target.closest('.cloze-other');
     if (other) {
+      e.preventDefault();
       e.stopPropagation();
       toggleOtherCloze(other);
       return;
     }
+
+    // 2. Tapped active target cloze -> reveal
+    const target = e.target.closest('.cloze-target');
+    if (target) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!state.revealed) {
+        doReveal();
+      }
+      return;
+    }
+
+    // 3. Tapped card background -> reveal
     if (!state.revealed) {
       doReveal();
     }
@@ -1148,8 +1258,8 @@
     if (targetEl) {
       targetEl.classList.remove('cloze-hidden');
       targetEl.classList.add('cloze-revealed');
-      const origText = targetEl.getAttribute('data-orig') || targetEl.textContent;
-      targetEl.textContent = origText;
+      const origHtml = targetEl.getAttribute('data-orig-html') || targetEl.getAttribute('data-orig') || targetEl.textContent;
+      targetEl.innerHTML = origHtml;
     }
 
     const contentArea = document.getElementById('reviewContentArea');
@@ -1724,10 +1834,16 @@
     }
   }
 
+  function closeReview() {
+    exitFullscreen();
+    renderHome();
+  }
+
   // ── Public API for UI bindings ───────────────────────────────
   window.NoteRecallMobile = {
     startReview,
-    closeReview: renderHome,
+    closeReview,
+    toggleFullscreen,
     doReveal,
     onCardBoxClick,
     cycleHint,
